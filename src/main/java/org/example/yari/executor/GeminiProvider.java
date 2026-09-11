@@ -11,43 +11,23 @@ import java.time.Duration;
 
 /**
  * AI provider implementation for the Google Gemini (Generative Language) API.
- *
- * <p>Uses the official {@code generativelanguage.googleapis.com} REST endpoint
- * via the standard {@link java.net.http.HttpClient} — no external Google SDK
- * dependency required.</p>
- *
- * <p>Endpoint pattern:
- * {@code https://generativelanguage.googleapis.com/v1beta/models/{modelId}:generateContent?key={apiKey}}</p>
- *
- * <p>Rate-limit errors (HTTP 429 / {@code RESOURCE_EXHAUSTED}) are intercepted
- * and surfaced as {@link RateLimitException} so the {@code TaskStateMachine}
- * can apply exponential backoff.</p>
  */
 public class GeminiProvider implements AiProvider {
 
     private static final String DEFAULT_BASE_URL =
             "https://generativelanguage.googleapis.com/v1beta/";
 
-    // HARDCODED API KEY: Gerçek AI Studio anahtarını buraya yapıştır
-    private static final String HARDCODED_API_KEY = "temporary";
+    // HARDCODED API KEY: Anahtarını doğrudan buraya yapıştır
+    private static final String HARDCODED_API_KEY = "AQ.Ab8RN6Joy2U-nfF89yyjbw97q2o-P35y8fqHMzBDwcmcxBob0Q";
 
     private final String apiKey;
     private final String baseUrl;
     private final HttpClient httpClient;
 
-    /**
-     * Constructs a GeminiProvider using the hardcoded API key and default base URL.
-     */
     public GeminiProvider() {
         this(HARDCODED_API_KEY, DEFAULT_BASE_URL);
     }
 
-    /**
-     * Constructs a GeminiProvider.
-     *
-     * @param apiKey   Google AI Studio API key (falls back to HARDCODED_API_KEY if null or blank)
-     * @param baseUrl  base URL override (may be null or blank for the default)
-     */
     public GeminiProvider(String apiKey, String baseUrl) {
         String effectiveKey = (apiKey != null && !apiKey.isBlank()) ? apiKey : HARDCODED_API_KEY;
         if (effectiveKey == null || effectiveKey.isBlank() || effectiveKey.equals("BURAYA_AI_STUDIO_GEMINI_KEY")) {
@@ -148,11 +128,6 @@ public class GeminiProvider implements AiProvider {
 
     // ---------- Response parsing helpers ------------------------------------------
 
-    /**
-     * Strictly extracts text from {@code candidates[0].content.parts[0].text}.
-     *
-     * @throws ProviderException if the expected path is missing or malformed
-     */
     private String extractCandidateText(String responseBody) throws ProviderException {
         try {
             JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
@@ -231,9 +206,6 @@ public class GeminiProvider implements AiProvider {
         }
     }
 
-    /**
-     * Attempts to extract a human-readable error message from a Gemini error response body.
-     */
     private String extractErrorMessage(String body) {
         try {
             JsonObject root = JsonParser.parseString(body).getAsJsonObject();
@@ -251,9 +223,6 @@ public class GeminiProvider implements AiProvider {
         return truncate(body, 300);
     }
 
-    /**
-     * Parses the {@code Retry-After} header. Falls back to 10 seconds if absent or invalid.
-     */
     private long parseRetryAfter(HttpResponse<String> response) {
         var retryHeader = response.headers().firstValue("retry-after");
         if (retryHeader.isPresent()) {
@@ -264,9 +233,6 @@ public class GeminiProvider implements AiProvider {
         return 10_000L;
     }
 
-    /**
-     * Truncates a string to the given max length, appending "…" if truncated.
-     */
     private static String truncate(String s, int maxLen) {
         if (s == null) return "";
         if (s.length() <= maxLen) return s;

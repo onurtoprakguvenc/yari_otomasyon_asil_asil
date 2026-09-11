@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cold Backlog Harvester | Kontrol Masası</title>
+    <style>
+        :root {
+            --bg-main: #0f1117;
+            --bg-card: #1a1d26;
+            --bg-input: #12141c;
+            --border: #282c39;
+            --text-main: #e6edf3;
+            --text-muted: #8b949e;
+            --success: #2ea043;
+            --warning: #d29922;
+            --danger: #f85149;
+            --accent: #58a6ff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            padding: 24px;
+            font-size: 14px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+        /* Üst Başlık */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 16px;
+        }
+
+        .title-group h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.5px; }
+        .title-group span { font-size: 12px; color: var(--text-muted); }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+        }
+
+        .status-IDLE { background: #21262d; color: var(--text-muted); border-color: var(--border); }
+        .status-RUNNING { background: rgba(46, 160, 67, 0.15); color: var(--success); border-color: var(--success); }
+        .status-WAITING_APPROVAL {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--warning);
+            border-color: var(--warning);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Ana Izgara */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card-header {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        /* Kontrol Butonları (Kapı) */
+        .controls-panel {
+            background: var(--bg-input);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-group { display: flex; gap: 8px; }
+
+        button {
+            cursor: pointer;
+            border: 1px solid transparent;
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: 0.15s;
+        }
+
+        .btn-approve { background: var(--success); color: #fff; }
+        .btn-approve:hover { background: #2c9740; }
+
+        .btn-retry { background: transparent; border-color: var(--warning); color: var(--warning); }
+        .btn-retry:hover { background: rgba(210, 153, 34, 0.1); }
+
+        .btn-abort { background: transparent; border-color: var(--danger); color: var(--danger); }
+        .btn-abort:hover { background: rgba(248, 81, 73, 0.1); }
+
+        /* Dosya Listesi */
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 480px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            padding: 8px 10px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            transition: 0.1s;
+        }
+
+        .file-item:hover, .file-item.active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* İçerik Önizleme */
+        .preview-area {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 16px;
+            height: 520px;
+            overflow: auto;
+            font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: #d1d7e0;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="top-bar">
+        <div class="title-group">
+            <h1>Cold Backlog Harvester</h1>
+            <span>Asenkron Boru Hattı İzleme ve Onay Masası</span>
+        </div>
+        <div id="statusBadge" class="status-pill status-IDLE">IDLE</div>
+    </div>
+
+    <!-- Onay Bildirim Paneli -->
+    <div id="approvalPanel" class="controls-panel">
+        <div style="font-weight: 600; color: var(--warning);" id="approvalPrompt">Aşama tamamlandı. Devam edilsin mi?</div>
+        <div class="btn-group">
+            <button class="btn-approve" onclick="triggerDecision('approve')">Onayla ve Devam Et (y)</button>
+            <button class="btn-retry" onclick="triggerDecision('retry')">Aşamayı Tekrarla (r)</button>
+            <button class="btn-abort" onclick="triggerDecision('abort')">Hattı Kes (q)</button>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <!-- Sol Panel: Dosyalar -->
+        <div class="card">
+            <div class="card-header">Diskteki Çıktılar (artifacts/)</div>
+            <div id="fileList" class="file-list">
+                <div style="color: var(--text-muted);">Taranıyor...</div>
+            </div>
+        </div>
+
+        <!-- Sağ Panel: Dosya İçeriği -->
+        <div class="card">
+            <div class="card-header" id="selectedFileName">Önizleme (Dosya Seçilmedi)</div>
+            <div id="fileViewer" class="preview-area">İncelemek istediğiniz çıktıyı soldaki listeden seçin.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = "http://localhost:8080";
+    let activeFile = null;
+
+    async function syncPipeline() {
+        try {
+            const res = await fetch(`${API_BASE}/api/status`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // Durum etiketi
+            const badge = document.getElementById("statusBadge");
+            badge.innerText = data.status;
+            badge.className = `status-pill status-${data.status}`;
+
+            // Checkpoint Onay Kapısı Kontrolü
+            const approvalPanel = document.getElementById("approvalPanel");
+            if (data.waiting) {
+                approvalPanel.style.display = "flex";
+                document.getElementById("approvalPrompt").innerText = data.details || "Aşama onayı bekleniyor.";
+            } else {
+                approvalPanel.style.display = "none";
+            }
+
+            // Dosya Listesi Güncelleme
+            const fileListContainer = document.getElementById("fileList");
+            if (data.artifacts && data.artifacts.length > 0) {
+                fileListContainer.innerHTML = data.artifacts.map(file => `
+                    <div class="file-item ${file === activeFile ? 'active' : ''}" onclick="viewArtifact('${file}')">
+                        ${file}
+                    </div>
+                `).join("");
+            } else {
+                fileListContainer.innerHTML = `<div style="color: var(--text-muted);">Henüz çıktı üretilmedi.</div>`;
+            }
+
+        } catch (err) {
+            document.getElementById("statusBadge").innerText = "OFFLINE";
+            document.getElementById("statusBadge").className = "status-pill status-IDLE";
+        }
+    }
+
+    async function triggerDecision(action) {
+        try {
+            await fetch(`${API_BASE}/api/decision`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `action=${action}`
+            });
+            document.getElementById("approvalPanel").style.display = "none";
+            syncPipeline();
+        } catch (e) {
+            alert("Komut iletilemedi: " + e);
+        }
+    }
+
+    async function viewArtifact(fileName) {
+        activeFile = fileName;
+        document.getElementById("selectedFileName").innerText = fileName;
+        const viewer = document.getElementById("fileViewer");
+        viewer.innerText = "Yükleniyor...";
+
+        try {
+            const res = await fetch(`${API_BASE}/api/artifact?file=${encodeURIComponent(fileName)}`);
+            if (res.ok) {
+                viewer.innerText = await res.text();
+            } else {
+                viewer.innerText = "Dosya okunamadı.";
+            }
+        } catch (e) {
+            viewer.innerText = "Hata oluştu: " + e;
+        }
+
+        // Aktif sınıfını güncelle
+        document.querySelectorAll(".file-item").forEach(el => {
+            el.classList.toggle("active", el.innerText.trim() === fileName);
+        });
+    }
+
+    // Her 2 saniyede bir durumu arka planda sorgula
+    setInterval(syncPipeline, 2000);
+    syncPipeline();
+</script>
+
+</body>
+</html>
