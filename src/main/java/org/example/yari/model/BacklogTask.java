@@ -12,7 +12,7 @@ import java.util.*;
 public class BacklogTask {
     private final String id;
     private final String name;
-    private final String promptTemplate;
+    private String promptTemplate;
     private final Map<String, String> promptParameters;
     private final TaskPriority priority;
     private final List<String> dependsOn;
@@ -37,7 +37,7 @@ public class BacklogTask {
         this.id = UUID.randomUUID().toString().substring(0, 8);
         this.name = name;
         this.promptTemplate = promptTemplate;
-        this.promptParameters = promptParameters != null ? new HashMap<>(promptParameters) : Map.of();
+        this.promptParameters = promptParameters != null ? new HashMap<>(promptParameters) : new HashMap<>();
         this.priority = priority;
         this.dependsOn = dependsOn != null ? new ArrayList<>(dependsOn) : List.of();
         this.outputSchemaId = outputSchemaId;
@@ -53,6 +53,19 @@ public class BacklogTask {
 
     public void recordTransition(TaskState from, TaskState to, String reason) {
         stateHistory.add(new StateTransitionRecord(from, to, reason, Instant.now()));
+        this.updatedAt = Instant.now();
+    }
+
+    // --- Dynamic Parameter Injection ---
+    public void putParameter(String key, String value) {
+        if (key != null && value != null) {
+            this.promptParameters.put(key, value);
+        }
+    }
+
+    // --- Setters for mutable fields ---
+    public void setPromptTemplate(String promptTemplate) {
+        this.promptTemplate = promptTemplate;
         this.updatedAt = Instant.now();
     }
 
@@ -86,21 +99,14 @@ public class BacklogTask {
     public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
 
     /**
-     * Resolves the prompt template by interpolating parameters.
-     * Angle brackets in parameter values are escaped to prevent injection.
+     * Resolves the prompt template by interpolating parameters without corrupting technical syntax.
      */
     public String resolvePrompt() {
         String resolved = promptTemplate;
         for (Map.Entry<String, String> entry : promptParameters.entrySet()) {
-            String safeValue = sanitize(entry.getValue());
-            resolved = resolved.replace("{{" + entry.getKey() + "}}", safeValue);
+            resolved = resolved.replace("{{" + entry.getKey() + "}}", entry.getValue() != null ? entry.getValue() : "");
         }
         return resolved;
-    }
-
-    private String sanitize(String input) {
-        if (input == null) return "";
-        return input.replace("<", "&lt;").replace(">", "&gt;");
     }
 
     @Override

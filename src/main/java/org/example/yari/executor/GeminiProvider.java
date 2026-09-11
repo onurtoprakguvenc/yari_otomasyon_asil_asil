@@ -28,34 +28,23 @@ public class GeminiProvider implements AiProvider {
     private static final String DEFAULT_BASE_URL =
             "https://generativelanguage.googleapis.com/v1beta/";
 
-    // HARDCODED API KEY: Gerçek AI Studio anahtarını buraya yapıştır
-    private static final String HARDCODED_API_KEY = "temporary";
-
     private final String apiKey;
     private final String baseUrl;
     private final HttpClient httpClient;
 
     /**
-     * Constructs a GeminiProvider using the hardcoded API key and default base URL.
-     */
-    public GeminiProvider() {
-        this(HARDCODED_API_KEY, DEFAULT_BASE_URL);
-    }
-
-    /**
      * Constructs a GeminiProvider.
      *
-     * @param apiKey   Google AI Studio API key (falls back to HARDCODED_API_KEY if null or blank)
+     * @param apiKey   Google AI Studio API key
      * @param baseUrl  base URL override (may be null or blank for the default)
      */
     public GeminiProvider(String apiKey, String baseUrl) {
-        String effectiveKey = (apiKey != null && !apiKey.isBlank()) ? apiKey : HARDCODED_API_KEY;
-        if (effectiveKey == null || effectiveKey.isBlank() || effectiveKey.equals("BURAYA_AI_STUDIO_GEMINI_KEY")) {
+        if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalArgumentException(
                     "Gemini API key must not be blank. "
-                            + "Obtain a free key from https://aistudio.google.com/apikey");
+                    + "Obtain a free key from https://aistudio.google.com/apikey");
         }
-        this.apiKey = effectiveKey;
+        this.apiKey = apiKey;
         this.baseUrl = (baseUrl == null || baseUrl.isBlank()) ? DEFAULT_BASE_URL : baseUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
@@ -88,7 +77,7 @@ public class GeminiProvider implements AiProvider {
 
         // ---- Build endpoint URI ------------------------------------------------
         String normalizedBase = this.baseUrl.endsWith("/") ? this.baseUrl : this.baseUrl + "/";
-        String effectiveModel = (modelId == null || modelId.isBlank()) ? "gemini-3.6-flash" : modelId;
+        String effectiveModel = (modelId == null || modelId.isBlank()) ? "gemini-2.5-flash" : modelId;
         String url = normalizedBase + "models/" + effectiveModel + ":generateContent?key=" + apiKey;
 
         URI uri;
@@ -127,6 +116,8 @@ public class GeminiProvider implements AiProvider {
                     retryAfterMs);
         }
 
+        // Google may also signal quota exhaustion as 200 with an error body,
+        // or as 503 with RESOURCE_EXHAUSTED in the JSON error status.
         if (statusCode == 503 && body.contains("RESOURCE_EXHAUSTED")) {
             long retryAfterMs = parseRetryAfter(httpResponse);
             throw new RateLimitException(
@@ -157,6 +148,7 @@ public class GeminiProvider implements AiProvider {
         try {
             JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
 
+            // Check for inline error responses even on 200
             if (root.has("error")) {
                 JsonObject error = root.getAsJsonObject("error");
                 String msg = error.has("message") ? error.get("message").getAsString() : "unknown";
@@ -165,6 +157,7 @@ public class GeminiProvider implements AiProvider {
             }
 
             if (!root.has("candidates")) {
+                // Some responses may have "promptFeedback" with a block reason
                 if (root.has("promptFeedback")) {
                     JsonObject feedback = root.getAsJsonObject("promptFeedback");
                     String blockReason = feedback.has("blockReason")
@@ -184,6 +177,7 @@ public class GeminiProvider implements AiProvider {
 
             JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
 
+            // Check finish reason for safety blocks
             if (firstCandidate.has("finishReason")) {
                 String finishReason = firstCandidate.get("finishReason").getAsString();
                 if ("SAFETY".equals(finishReason) || "RECITATION".equals(finishReason)) {
@@ -209,6 +203,7 @@ public class GeminiProvider implements AiProvider {
                         "Gemini candidate[0].content.parts is empty", -1);
             }
 
+            // Concatenate all text parts (multi-part responses are possible)
             StringBuilder textBuilder = new StringBuilder();
             for (JsonElement partEl : parts) {
                 JsonObject part = partEl.getAsJsonObject();
@@ -247,12 +242,14 @@ public class GeminiProvider implements AiProvider {
                 }
             }
         } catch (Exception ignored) {
+            // Not valid JSON or unexpected structure — fall through
         }
         return truncate(body, 300);
     }
 
     /**
-     * Parses the {@code Retry-After} header. Falls back to 10 seconds if absent or invalid.
+     * Parses the {@code Retry-After} header. Falls back to 10 seconds if absent or invalid,
+     * since Gemini free-tier rate limits can be aggressive.
      */
     private long parseRetryAfter(HttpResponse<String> response) {
         var retryHeader = response.headers().firstValue("retry-after");
@@ -261,6 +258,8 @@ public class GeminiProvider implements AiProvider {
                 return Long.parseLong(retryHeader.get()) * 1000L;
             } catch (NumberFormatException ignored) {}
         }
+        // Gemini free-tier default: 10 seconds — slightly more conservative than
+        // paid-tier providers to respect the generous but narrow quota window.
         return 10_000L;
     }
 

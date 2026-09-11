@@ -3,18 +3,25 @@ package org.example.yari.util;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Validates prompt templates against dynamic intake rules before queuing.
- * Rejects malformed definitions upfront to avoid generating low-value junk outputs.
+ * Rejects malformed definitions upfront to avoid generating low-value junk outputs,
+ * while allowing dynamic runtime stage pipeline context placeholders.
  */
 public final class PromptValidator {
 
     private static final Pattern PARAM_PATTERN = Pattern.compile("\\{\\{(\\w+)}}");
     private static final int MAX_PROMPT_LENGTH = 100_000;
     private static final int MIN_PROMPT_LENGTH = 5;
+
+    // Dinamik olarak aşamalar arası taşınan boru hattı değişkenleri statik validasyondan muaftır
+    private static final Set<String> RUNTIME_PIPELINE_CONTEXT_PARAMS = Set.of(
+            "previousStageContext"
+    );
 
     private PromptValidator() {}
 
@@ -50,19 +57,13 @@ public final class PromptValidator {
             declaredParams.add(matcher.group(1));
         }
 
-        // Check all declared parameters have values
+        // Check all declared parameters have values (runtime stage context placeholders are bypassed)
         for (String param : declaredParams) {
+            if (RUNTIME_PIPELINE_CONTEXT_PARAMS.contains(param)) {
+                continue;
+            }
             if (parameters == null || !parameters.containsKey(param)) {
                 errors.add(String.format("Template references parameter '{{%s}}' but no value was provided.", param));
-            }
-        }
-
-        // Check for unused provided parameters (warning, not error)
-        if (parameters != null) {
-            for (String key : parameters.keySet()) {
-                if (!declaredParams.contains(key)) {
-                    // Not an error, just informational
-                }
             }
         }
 
