@@ -1,0 +1,7 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Yarı Otomasyon"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+    </extensions>
+</idea-plugin>

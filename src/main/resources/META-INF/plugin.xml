@@ -1,0 +1,79 @@
+<idea-plugin>
+    <id>org.example.yari_otomasyon</id>
+    <name>Yarı Otomasyon – AI Backlog Runner</name>
+    <vendor email="support@example.org" url="https://example.org">Example Org</vendor>
+
+    <description><![CDATA[
+    Semi-autonomous, asynchronous background execution of low-priority AI prompt backlogs.
+    Optimizes idle subscription quota usage while preventing cognitive fatigue.
+    Enforces human-in-the-loop approval checkpoints between sequential task dependencies.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <resource-bundle>messages.YariBundle</resource-bundle>
+
+    <!-- Notification group registration -->
+    <depends optional="true" config-file="yari_notification.xml">com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Persistent settings -->
+        <applicationService
+            serviceImplementation="org.example.yari.settings.YariSettings"/>
+
+        <!-- Configurable settings panel -->
+        <applicationConfigurable
+            parentId="tools"
+            instance="org.example.yari.settings.YariSettingsConfigurable"
+            id="org.example.yari.settings"
+            displayName="Yarı Otomasyon"/>
+
+        <!-- Project-level services -->
+        <projectService
+            serviceImplementation="org.example.yari.queue.TaskQueueManager"/>
+        <projectService
+            serviceImplementation="org.example.yari.checkpoint.CheckpointManager"/>
+        <projectService
+            serviceImplementation="org.example.yari.notification.YariNotificationService"/>
+        <projectService
+            serviceImplementation="org.example.yari.executor.BacklogExecutorService"/>
+
+        <!-- Tool window -->
+        <toolWindow
+            id="Yarı Otomasyon"
+            secondary="true"
+            anchor="bottom"
+            factoryClass="org.example.yari.ui.YariToolWindowFactory"
+            icon="/icons/yari_icon.svg"/>
+
+        <!-- Startup activity -->
+        <postStartupActivity
+            implementation="org.example.yari.YariStartupActivity"/>
+    </extensions>
+
+    <actions>
+        <group id="Yari.ActionGroup" text="Yarı Otomasyon" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+
+            <action id="Yari.AddTask"
+                class="org.example.yari.ui.actions.AddTaskAction"
+                text="Add Task to Backlog"
+                description="Queue a new AI prompt task"/>
+
+            <action id="Yari.PauseQueue"
+                class="org.example.yari.ui.actions.PauseQueueAction"
+                text="Pause Queue"
+                description="Pause backlog execution"/>
+
+            <action id="Yari.ResumeQueue"
+                class="org.example.yari.ui.actions.ResumeQueueAction"
+                text="Resume Queue"
+                description="Resume backlog execution"/>
+
+            <action id="Yari.ClearCompleted"
+                class="org.example.yari.ui.actions.ClearCompletedAction"
+                text="Clear Completed Tasks"
+                description="Remove completed tasks from the queue"/>
+        </group>
+    </actions>
+</idea-plugin>
