@@ -963,7 +963,7 @@ public final class MainRunner {
                 # Modular Phase Decomposition
 
                 Do not append WAITING_APPROVAL; this completes the specification pipeline.
-                </dynamic_input>
+                </dynamic_input>.
                 """;
 
         backlog.add(new StagedBacklogTask(
